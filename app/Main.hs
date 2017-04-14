@@ -49,8 +49,8 @@ button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off"
           True  -> False
           False -> True
 
-ui :: Component (Bool, Bool)
-ui st = Div [] [ zoom _1 st button, zoom _2 st button ]
+ui :: Component (Bool, String)
+ui st = Div [] [ zoom _1 st button, zoom _2 st ajax ]
 
 --------------------------------------------------------------------------------
 
