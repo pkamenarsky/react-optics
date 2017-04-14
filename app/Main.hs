@@ -4,17 +4,21 @@ module Main where
 
 import Lib
 
-data Effect st =
+data Effect pst st =
     Pure (st -> st)
-  | GetHTTP String (String -> Effect st)
+  | GetHTTP String (String -> Effect pst st)
+  | Parent (pst -> pst)
 
-mapEffect :: (st' -> st, st -> st' -> st') -> Effect st -> Effect st'
+mapEffect :: (st' -> st, st -> st' -> st') -> Effect pst st -> Effect pst st'
 mapEffect (get, set) (Pure f) = Pure (\st -> set (f (get st)) st)
-mapEffect lns (GetHTTP url eff) = (GetHTTP url $ \r -> (mapEffect lns (eff r)))
+mapEffect lns (GetHTTP url eff) = GetHTTP url $ \r -> (mapEffect lns (eff r))
+mapEffect lns (Parent f) = Parent f
 
-data Attrs st =
-    OnAttach (Effect st)
-  | OnClick (Effect st)
+type Lens st' st = (st' -> st, st -> st' -> st')
+
+data Attrs pst st =
+    OnAttach (Effect pst st)
+  | OnClick (Effect pst st)
 
 _1 :: (((a, b) -> a), (a -> (a, b) -> (a, b)))
 _1 = (fst, \a (_, b) -> (a, b))
@@ -22,34 +26,35 @@ _1 = (fst, \a (_, b) -> (a, b))
 _2 :: (((a, b) -> b), (b -> (a, b) -> (a, b)))
 _2 = (snd, \b (a, _) -> (a, b))
 
-mapAttrs :: (st' -> st, st -> st' -> st') -> Attrs st -> Attrs st'
+mapAttrs :: Lens st' st -> Attrs pst st -> Attrs pst st'
 mapAttrs lns (OnAttach eff) = OnAttach (mapEffect lns eff)
 mapAttrs lns (OnClick eff) = OnClick (mapEffect lns eff)
 
-data Html st = Div [Attrs st] [Html st] | Text String
+data Html pst st = Div [Attrs pst st] [Html pst st] | Text String
 
-mapHtml :: (st' -> st, st -> st' -> st') -> Html st -> Html st'
+mapHtml :: Lens st' st -> Html pst st -> Html pst st'
 mapHtml lns (Div attrs children) = Div (map (mapAttrs lns) attrs) (map (mapHtml lns) children)
 
 --------------------------------------------------------------------------------
 
-type Component st = st -> Html st
+type Component pst st = st -> Html pst st
 
-zoom :: (st' -> st, st -> st' -> st') -> st' -> Component st -> Html st'
-zoom lns@(get, _) st cmp = mapHtml lns (cmp (get st))
+zoom :: Lens st' st -> st' -> Component st' st -> Html st'' st'
+zoom lns@(get, _) st cmp = mapHtml lns (undefined (get st))
 
-ajax :: Component String
-ajax str = Div [ OnAttach init, OnClick fetch ] [ Text str ]
+ajax :: Component (Bool, String) String
+ajax str = Div [ OnAttach init, OnClick fetch, OnClick parent ] [ Text str ]
   where init  = GetHTTP ("google.com/q=init") $ \res -> Pure (const res)
         fetch = GetHTTP ("google.com/q=" ++ str) $ \res -> Pure (const res)
+        parent = Parent $ \(b, str) -> (not b, str)
 
-button :: Component Bool
+button :: Component st Bool
 button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off" ]
   where toggle = Pure $ \st -> case st of
           True  -> False
           False -> True
 
-ui :: Component (Bool, String)
+ui :: Component (Bool, String) (Bool, String)
 ui st = Div [] [ zoom _1 st button, zoom _2 st ajax ]
 
 --------------------------------------------------------------------------------
