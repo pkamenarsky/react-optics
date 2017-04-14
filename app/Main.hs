@@ -5,10 +5,10 @@ module Main where
 
 import Lib
 
-data Effect pst st =
+data Effect st' st =
     Pure (st -> st)
-  | GetHTTP String (String -> Effect pst st)
-  | Parent (pst -> pst)
+  | Parent (st' -> st')
+  | GetHTTP String (String -> Effect st' st)
 
 mapEffect :: (st' -> st, st -> st' -> st') -> Effect st' st -> Effect st'' st'
 mapEffect (get, set) (Pure f) = Pure (\st -> set (f (get st)) st)
