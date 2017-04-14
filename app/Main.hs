@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -39,6 +40,8 @@ mapHtml lns (Div attrs children) = Div (map (mapAttrs lns) attrs) (map (mapHtml 
 
 type Component pst st = st -> Html pst st
 
+type Component' st = forall pst. Component pst st
+
 zoom :: Lens st' st -> st' -> Component st' st -> Html st'' st'
 zoom lns@(get, _) st cmp = mapHtml lns (undefined (get st))
 
@@ -48,13 +51,13 @@ ajax str = Div [ OnAttach init, OnClick fetch, OnClick parent ] [ Text str ]
         fetch = GetHTTP ("google.com/q=" ++ str) $ \res -> Pure (const res)
         parent = Parent $ \(b, str) -> (not b, str)
 
-button :: Component st Bool
+button :: Component' Bool
 button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off" ]
   where toggle = Pure $ \st -> case st of
           True  -> False
           False -> True
 
-ui :: Component (Bool, String) (Bool, String)
+ui :: Component' (Bool, String)
 ui st = Div [] [ zoom _1 st button, zoom _2 st ajax ]
 
 --------------------------------------------------------------------------------
