@@ -1,12 +1,16 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StaticPointers #-}
 
 module Main where
+
+import GHC.StaticPtr
 
 import Lib
 
 data Effect st' st =
     Pure (st -> st)
+  | RemoteF (StaticPtr (st -> st))
   | Parent (st' -> st')
   | GetHTTP String (String -> Effect st' st)
 
@@ -38,12 +42,34 @@ mapHtml lns (Div attrs children) = Div (map (mapAttrs lns) attrs) (map (mapHtml 
 
 --------------------------------------------------------------------------------
 
+data Remote st = Remote st
+
+remotely :: StaticPtr (a -> b) -> Remote a -> b
+remotely = undefined
+
+modifyRemotely :: StaticPtr (a -> b) -> Remote a -> Remote b
+modifyRemotely = undefined
+
+combine :: Remote a -> Remote b -> Remote (a, b)
+combine = undefined
+
+remoteF :: StaticPtr (a -> b) -> a -> b
+remoteF = undefined
+
+--------------------------------------------------------------------------------
+
 type ChildComponent st' st = st -> Html st' st
 
 type Component st = forall st'. ChildComponent st' st
 
 zoom :: Lens st' st -> st' -> ChildComponent st' st -> Html st'' st'
 zoom lns@(get, _) st cmp = mapHtml lns (cmp (get st))
+
+zoomRemote :: Lens st' (Remote st) -> st' -> ChildComponent st' st -> Html st'' st'
+-- zoomRemote lns@(get, _) st cmp = mapHtml lns (cmp (get st))
+zoomRemote lns@(get, _) st cmp = undefined
+
+--------------------------------------------------------------------------------
 
 ajax :: (st -> st) -> ChildComponent st String
 ajax parst str = Div [ OnAttach init, OnClick fetch, OnClick parent ] [ Text str ]
@@ -57,10 +83,15 @@ button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off"
           True  -> False
           False -> True
 
-ui :: Component (Bool, String)
-ui st = Div [] [ zoom _1 st button, zoom _2 st (ajax $ \(a, b) -> (not a, b ++ "str")) ]
+ui :: Component (Remote Bool, String)
+ui st = Div [] [ zoomRemote _1 st button, zoom _2 st (ajax $ \(a, b) -> (modifyRemotely (static not) a, b ++ "str")) ]
+  where notR = remotely (static not) (fst st)
+        str = remoteF (static length) (snd st)
 
 --------------------------------------------------------------------------------
 
+runComponent :: st -> ChildComponent () st -> IO ()
+runComponent = undefined
+
 main :: IO ()
-main = someFunc
+main = runComponent (Remote True, "string") ui
