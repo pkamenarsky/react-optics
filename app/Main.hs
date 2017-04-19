@@ -1,13 +1,18 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StaticPointers #-}
 
 module Main where
+
+import GHC.StaticPtr
 
 import Lib
 
 data Effect st' st =
     Pure (st -> st)
+  | Remote (StaticPtr (st -> st))
   | Parent (st' -> st')
+  | RemoteParent (StaticPtr (st' -> st'))
   | GetHTTP String (String -> Effect st' st)
 
 mapEffect :: (st' -> st, st -> st' -> st') -> Effect st' st -> Effect st'' st'
@@ -42,14 +47,17 @@ type ChildComponent st' st = st -> Html st' st
 
 type Component st = forall st'. ChildComponent st' st
 
+remotely :: StaticPtr (a -> b) -> a -> b
+remotely = undefined
+
 zoom :: Lens st' st -> st' -> ChildComponent st' st -> Html st'' st'
 zoom lns@(get, _) st cmp = mapHtml lns (cmp (get st))
 
-ajax :: (st -> st) -> ChildComponent st String
+ajax :: StaticPtr (st -> st) -> ChildComponent st String
 ajax parst str = Div [ OnAttach init, OnClick fetch, OnClick parent ] [ Text str ]
   where init  = GetHTTP ("google.com/q=init") $ \res -> Pure (const res)
         fetch = GetHTTP ("google.com/q=" ++ str) $ \res -> Pure (const res)
-        parent = Parent parst
+        parent = RemoteParent parst
 
 button :: Component Bool
 button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off" ]
@@ -58,7 +66,8 @@ button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off"
           False -> True
 
 ui :: Component (Bool, String)
-ui st = Div [] [ zoom _1 st button, zoom _2 st (ajax $ \(a, b) -> (not a, b ++ "str")) ]
+ui st = Div [] [ zoom _1 st button, zoom _2 st (ajax $ static (\(a, b) -> (not a, b ++ "str"))) ]
+  where localbool = remotely (static id) (fst st)
 
 --------------------------------------------------------------------------------
 
