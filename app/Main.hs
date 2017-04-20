@@ -25,6 +25,7 @@ type Lens st' st = (st' -> st, st -> st' -> st')
 data Attrs pst st =
     OnAttach (Effect pst st)
   | OnClick (Effect pst st)
+  | OnFetch (Effect pst st) (Effect pst st) -- used to set/unset loading indicator
 
 _1 :: (((a, b) -> a), (a -> (a, b) -> (a, b)))
 _1 = (fst, \a (_, b) -> (a, b))
@@ -43,6 +44,23 @@ mapHtml lns (Div attrs children) = Div (map (mapAttrs lns) attrs) (map (mapHtml 
 
 --------------------------------------------------------------------------------
 
+data ChildComponent' st' st = ChildComponent'
+  { render :: st -> Html st' st
+  , attach :: Effect st' st
+  , detach :: Effect st' st
+  , fetch  :: (Effect st' st, Effect st' st)
+  }
+
+type Component' st = forall st'. ChildComponent' st' st
+
+simpleComponent :: (st -> Html st' st) -> ChildComponent' st' st
+simpleComponent render = ChildComponent'
+  { render = render
+  , attach = Pure id
+  , detach = Pure id
+  , fetch  = (Pure id, Pure id)
+  }
+
 type ChildComponent st' st = st -> Html st' st
 
 type Component st = forall st'. ChildComponent st' st
@@ -53,6 +71,9 @@ remotely = undefined
 zoom :: Lens st' st -> st' -> ChildComponent st' st -> Html st'' st'
 zoom lns@(get, _) st cmp = mapHtml lns (cmp (get st))
 
+zoomEff :: (st' -> st) -> (st -> Effect st'' st') -> st' -> ChildComponent st' st -> Html st'' st'
+zoomEff = undefined
+
 ajax :: StaticPtr (st -> st) -> ChildComponent st String
 ajax parst str = Div [ OnAttach init, OnClick fetch, OnClick parent ] [ Text str ]
   where init  = GetHTTP ("google.com/q=init") $ \res -> Pure (const res)
@@ -61,6 +82,12 @@ ajax parst str = Div [ OnAttach init, OnClick fetch, OnClick parent ] [ Text str
 
 button :: Component Bool
 button toggled = Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off" ]
+  where toggle = Pure $ \st -> case st of
+          True  -> False
+          False -> True
+
+button' :: Component' Bool
+button' = simpleComponent $ \toggled -> Div [ OnClick toggle ] [ Text $ if toggled then "On" else "Off" ]
   where toggle = Pure $ \st -> case st of
           True  -> False
           False -> True
