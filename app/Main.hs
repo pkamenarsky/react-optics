@@ -4,6 +4,9 @@
 
 module Main where
 
+import Data.IORef
+import System.IO.Unsafe
+
 import GHC.StaticPtr
 
 import Lib
@@ -100,3 +103,23 @@ ui st = Div [] [ zoom _1 st button, zoom _2 st (ajax $ static (\(a, b) -> (not a
 
 main :: IO ()
 main = someFunc
+
+--------------------------------------------------------------------------------
+
+data RemoteMap k v = RemoteMap (IORef [(k, v)]) (IO ())
+
+request :: req -> (rsp -> IO ()) -> IO ()
+request = undefined
+
+get :: Ord k => k -> RemoteMap k v -> Maybe v
+get k (RemoteMap cache render) = unsafePerformIO $ do
+  cache' <- readIORef cache
+
+  case lookup k cache' of
+    Just v  -> return $ Just v
+    Nothing -> do
+      request k $ \v -> do
+        modifyIORef cache ((k, v):)
+        render
+      -- throw exception
+      return undefined
