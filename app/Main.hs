@@ -1,8 +1,11 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE StaticPointers #-}
+-- {-# LANGUAGE StaticPointers #-}
 
 module Main where
+
+import Data.Monoid
 
 import Data.IORef
 import System.IO.Unsafe
@@ -95,9 +98,11 @@ button' = simpleComponent $ \toggled -> Div [ OnClick toggle ] [ Text $ if toggl
           True  -> False
           False -> True
 
+{-
 ui :: Component (Bool, String)
 ui st = Div [] [ zoom _1 st button, zoom _2 st (ajax $ static (\(a, b) -> (not a, b ++ "str"))) ]
   where localbool = remotely (static id) (fst st)
+-}
 
 --------------------------------------------------------------------------------
 
@@ -123,3 +128,26 @@ get k (RemoteMap cache render) = unsafePerformIO $ do
         render
       -- throw exception
       return undefined
+
+--------------------------------------------------------------------------------
+
+type BBox = (Int, Int, Int, Int)
+
+data Layout = Layout { layoutBBoxes :: [BBox] -> [BBox] -> [BBox], layoutChildren :: [Layout] }
+data UI = UI { bboxes :: [BBox], uiChildren :: [UI] } deriving Show
+
+mkUI :: [BBox] -> Layout -> UI
+mkUI pBBoxes layout = UI myBBoxes chUI
+  where
+    chUI = map (mkUI myBBoxes) (layoutChildren layout)
+    myBBoxes = layoutBBoxes layout pBBoxes (concatMap bboxes chUI)
+
+fixedLayout :: Layout
+fixedLayout = Layout layout []
+  where
+    layout _ _ = [(0, 0, 10, 10)]
+
+responsiveLayout :: Layout
+responsiveLayout = Layout layout [fixedLayout]
+  where
+    layout _ ch = ch
