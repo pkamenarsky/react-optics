@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 -- {-# LANGUAGE StaticPointers #-}
 
@@ -71,8 +72,8 @@ type ChildComponent st' st = st -> Html st' st
 
 type Component st = forall st'. ChildComponent st' st
 
-remotely :: StaticPtr (a -> b) -> a -> b
-remotely = undefined
+-- remotely :: StaticPtr (a -> b) -> a -> b
+-- remotely = undefined
 
 zoom :: Lens st' st -> st' -> ChildComponent st' st -> Html st'' st'
 zoom lns@(get, _) st cmp = mapHtml lns (cmp (get st))
@@ -151,3 +152,22 @@ responsiveLayout :: Layout
 responsiveLayout = Layout layout [fixedLayout]
   where
     layout _ ch = ch
+
+--------------------------------------------------------------------------------
+
+data Static a = Static a
+
+class Remotely a where
+  remotely :: Static (a -> r) -> a -> r
+
+instance {-# OVERLAPPABLE #-} Remotely a where
+  remotely (Static ptr) a = ptr a
+
+instance Remotely r => Remotely (a -> r) where
+  remotely (Static ptr) a = remotely (Static $ \a -> ptr a) a
+
+plus :: Static (Int -> Int -> Int)
+plus = Static (+)
+
+-- testR :: _
+testR = remotely plus 4 5
